@@ -49,7 +49,6 @@ func RegisterSearchPage(mux *http.ServeMux) {
 
 <script>
 let debounceTimer;
-
 const qInput = document.getElementById('q');
 const resultsDiv = document.getElementById('results');
 
@@ -112,20 +111,24 @@ function collapseAll() {
 
 async function toggleGenre(e, profileId, genreId, genreName) {
     e.stopImmediatePropagation();
-    if (!confirm('Toggle entire genre "' + genreName + '" for this profile?\n\nThis will affect ALL channels in that genre.')) {
-        return;
-    }
+    
+    const action = confirm('Toggle entire genre "' + genreName + '"?\n\nThis will affect ALL channels in that genre for this profile.') 
+        ? 'toggle' : null;
+    if (!action) return;
 
     try {
         const form = new FormData();
         form.append('id', profileId);
         form.append('genre_id', genreId);
-
-        const res = await fetch('/api/filters/toggle_genre', { method: 'POST', body: form });
+        // We let the backend flip the current state (no need to send disabled flag)
+        const res = await fetch('/api/filters/toggle_genre', { 
+            method: 'POST', 
+            body: form 
+        });
 
         if (res.ok) {
-            alert('Genre toggled successfully. Refreshing results...');
-            performSearch();
+            alert('Genre toggled successfully. Refreshing...');
+            performSearch();   // auto refresh
         } else {
             alert('Failed to toggle genre');
         }
