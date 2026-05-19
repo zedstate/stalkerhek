@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"regexp"
 
 	"github.com/kidpoleon/stalkerhek/filterstore"
 	"github.com/kidpoleon/stalkerhek/stalker"
@@ -592,19 +593,10 @@ func RegisterFilterHandlers(mux *http.ServeMux) {
 var _ = stalker.Channel{}
 
 // =============================================
-// Cross-Profile Search API
+// Cross-Profile Channel Search
 // =============================================
 
-import (
-	"encoding/json"
-	"net/http"
-	"regexp"
-	"strings"
-
-	"github.com/kidpoleon/stalkerhek/filterstore"
-)
-
-type channelInfo struct {
+type searchChannelInfo struct {
 	Title   string `json:"title"`
 	Genre   string `json:"genre"`
 	GenreID string `json:"genre_id"`
@@ -612,10 +604,10 @@ type channelInfo struct {
 }
 
 type searchResult struct {
-	ProfileID   int           `json:"profile_id"`
-	ProfileName string        `json:"profile_name"`
-	Channels    []channelInfo `json:"channels"`
-	Total       int           `json:"total"`
+	ProfileID   int                 `json:"profile_id"`
+	ProfileName string              `json:"profile_name"`
+	Channels    []searchChannelInfo `json:"channels"`
+	Total       int                 `json:"total"`
 }
 
 type searchResponse struct {
@@ -638,6 +630,7 @@ func RegisterSearchHandlers(mux *http.ServeMux) {
 			return
 		}
 
+		// Case-insensitive regex
 		regexStr := "(?i)" + q
 		re, err := regexp.Compile(regexStr)
 		if err != nil {
@@ -659,7 +652,7 @@ func RegisterSearchHandlers(mux *http.ServeMux) {
 				continue
 			}
 
-			var matches []channelInfo
+			var matches []searchChannelInfo
 			for _, ch := range channels {
 				if ch == nil {
 					continue
@@ -669,7 +662,7 @@ func RegisterSearchHandlers(mux *http.ServeMux) {
 					title = ch.Name
 				}
 				if re.MatchString(title) {
-					matches = append(matches, channelInfo{
+					matches = append(matches, searchChannelInfo{
 						Title:   title,
 						Genre:   ch.Genre(),
 						GenreID: ch.GenreID,
