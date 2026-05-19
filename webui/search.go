@@ -22,7 +22,7 @@ func RegisterSearchPage(mux *http.ServeMux) {
         .container { max-width:1280px; margin:0 auto; padding:20px; }
         h1 { color:var(--green); margin-bottom:20px; }
         input#q { width:100%; padding:16px; font-size:1.1rem; background:#1a2421; border:2px solid var(--green); border-radius:8px; color:white; margin-bottom:15px; }
-        .controls { margin-bottom:20px; display:flex; gap:10px; }
+        .controls { margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; }
         .result-group { background:#141a2a; border:1px solid var(--green); border-radius:8px; margin-bottom:20px; overflow:hidden; }
         .profile-header { padding:14px 18px; background:#1f2a24; display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-weight:bold; }
         .channels { padding:12px; max-height:600px; overflow-y:auto; }
@@ -49,6 +49,7 @@ func RegisterSearchPage(mux *http.ServeMux) {
 
 <script>
 let debounceTimer;
+
 const qInput = document.getElementById('q');
 const resultsDiv = document.getElementById('results');
 
@@ -74,26 +75,21 @@ async function performSearch() {
         }
 
         let html = '<h2>Results</h2>';
-        data.results.forEach(group => {
-            html += `
-            <div class="result-group">
-                <div class="profile-header" onclick="toggleGroup(this)">
-                    <span>${group.profile_name} — ${group.total} channels</span>
-                    <span>▼</span>
-                </div>
-                <div class="channels" style="display:none">
-                    ${group.channels.map(ch => `
-                        <div class="channel">
-                            <div>
-                                <strong>${ch.title}</strong><br>
-                                <small>${ch.genre}</small>
-                            </div>
-                            <div><span class="pill ${ch.enabled ? 'ok' : 'bad'}">${ch.enabled ? 'Enabled' : 'Disabled'}</span></div>
-                            <div><button class="genre-btn" onclick="toggleGenre(event, ${group.profile_id}, '${ch.genre_id}', '${ch.genre.replace(/'/g, "\\'")}')">Toggle Genre</button></div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>`;
+        data.results.forEach(function(group) {
+            html += '<div class="result-group">' +
+                '<div class="profile-header" onclick="toggleGroup(this)">' +
+                    '<span>' + group.profile_name + ' — ' + group.total + ' channels</span>' +
+                    '<span>▼</span>' +
+                '</div>' +
+                '<div class="channels" style="display:none">' +
+                    group.channels.map(function(ch) {
+                        return '<div class="channel">' +
+                            '<div><strong>' + ch.title + '</strong><br><small>' + ch.genre + '</small></div>' +
+                            '<div><span class="pill ' + (ch.enabled ? 'ok' : 'bad') + '">' + (ch.enabled ? 'Enabled' : 'Disabled') + '</span></div>' +
+                            '<div><button class="genre-btn" onclick="toggleGenre(event, ' + group.profile_id + ', \'' + ch.genre_id + '\', \'' + ch.genre.replace(/'/g, "\\'") + '\')">Toggle Genre</button></div>' +
+                        '</div>';
+                    }).join('') +
+                '</div></div>';
         });
         resultsDiv.innerHTML = html;
     } catch(e) {
@@ -103,21 +99,20 @@ async function performSearch() {
 
 function toggleGroup(header) {
     const content = header.nextElementSibling;
-    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+    content.style.display = (content.style.display === 'none') ? 'block' : 'none';
 }
 
 function expandAll() {
-    document.querySelectorAll('.channels').forEach(el => el.style.display = 'block');
+    document.querySelectorAll('.channels').forEach(function(el) { el.style.display = 'block'; });
 }
 
 function collapseAll() {
-    document.querySelectorAll('.channels').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.channels').forEach(function(el) { el.style.display = 'none'; });
 }
 
 async function toggleGenre(e, profileId, genreId, genreName) {
     e.stopImmediatePropagation();
-    
-    if (!confirm(`Toggle entire genre "${genreName}" for this profile?\n\nThis will affect ALL channels in that genre.`)) {
+    if (!confirm('Toggle entire genre "' + genreName + '" for this profile?\n\nThis will affect ALL channels in that genre.')) {
         return;
     }
 
@@ -125,15 +120,12 @@ async function toggleGenre(e, profileId, genreId, genreName) {
         const form = new FormData();
         form.append('id', profileId);
         form.append('genre_id', genreId);
-        
-        const res = await fetch('/api/filters/toggle_genre', {
-            method: 'POST',
-            body: form
-        });
+
+        const res = await fetch('/api/filters/toggle_genre', { method: 'POST', body: form });
 
         if (res.ok) {
             alert('Genre toggled successfully. Refreshing results...');
-            performSearch(); // auto refresh
+            performSearch();
         } else {
             alert('Failed to toggle genre');
         }
@@ -142,7 +134,7 @@ async function toggleGenre(e, profileId, genreId, genreName) {
     }
 }
 
-qInput.addEventListener('input', () => {
+qInput.addEventListener('input', function() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(performSearch, 350);
 });
