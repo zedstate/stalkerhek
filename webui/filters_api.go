@@ -630,7 +630,6 @@ func RegisterSearchHandlers(mux *http.ServeMux) {
 			return
 		}
 
-		// Case-insensitive regex
 		regexStr := "(?i)" + q
 		re, err := regexp.Compile(regexStr)
 		if err != nil {
@@ -657,9 +656,9 @@ func RegisterSearchHandlers(mux *http.ServeMux) {
 				if ch == nil {
 					continue
 				}
-				title := ch.Title
+				title := strings.TrimSpace(ch.Title)  // Use Title only
 				if title == "" {
-					title = ch.Name
+					continue
 				}
 				if re.MatchString(title) {
 					matches = append(matches, searchChannelInfo{
