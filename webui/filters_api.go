@@ -590,3 +590,108 @@ func RegisterFilterHandlers(mux *http.ServeMux) {
 
 // helper to ensure we keep imports referenced
 var _ = stalker.Channel{}
+
+// =============================================
+// Cross-Profile Search API
+// =============================================
+
+import (
+	"encoding/json"
+	"net/http"
+	"regexp"
+	"strings"
+
+	"github.com/kidpoleon/stalkerhek/filterstore"
+)
+
+type channelInfo struct {
+	Title   string `json:"title"`
+	Genre   string `json:"genre"`
+	GenreID string `json:"genre_id"`
+	Enabled bool   `json:"enabled"`
+}
+
+type searchResult struct {
+	ProfileID   int           `json:"profile_id"`
+	ProfileName string        `json:"profile_name"`
+	Channels    []channelInfo `json:"channels"`
+	Total       int           `json:"total"`
+}
+
+type searchResponse struct {
+	Query   string         `json:"query"`
+	Results []searchResult `json:"results"`
+	Error   string         `json:"error,omitempty"`
+}
+
+func RegisterSearchHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("/api/search", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
+		if q == "" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(searchResponse{Query: ""})
+			return
+		}
+
+		regexStr := "(?i)" + q
+		re, err := regexp.Compile(regexStr)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(searchResponse{Error: "Invalid regex: " + err.Error()})
+			return
+		}
+
+		var results []searchResult
+
+		for _, p := range ListProfiles() {
+			if !IsRunning(p.ID) {
+				continue
+			}
+
+			channels, _, ok := GetProfileChannels(p.ID)
+			if !ok || channels == nil {
+				continue
+			}
+
+			var matches []channelInfo
+			for _, ch := range channels {
+				if ch == nil {
+					continue
+				}
+				title := ch.Title
+				if title == "" {
+					title = ch.Name
+				}
+				if re.MatchString(title) {
+					matches = append(matches, channelInfo{
+						Title:   title,
+						Genre:   ch.Genre(),
+						GenreID: ch.GenreID,
+						Enabled: filterstore.IsAllowed(p.ID, ch),
+					})
+				}
+			}
+
+			if len(matches) > 0 {
+				results = append(results, searchResult{
+					ProfileID:   p.ID,
+					ProfileName: p.Name,
+					Channels:    matches,
+					Total:       len(matches),
+				})
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(searchResponse{
+			Query:   q,
+			Results: results,
+		})
+	})
+}
