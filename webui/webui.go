@@ -102,7 +102,11 @@ func StartWithContext(ctx context.Context, cfg *stalker.Config, ready chan struc
 
     // mount per-profile channel/genre filter endpoints
     RegisterFilterHandlers(mux)
-
+	
+	// Cross-profile search
+	RegisterSearchHandlers(mux)
+	RegisterSearchPage(mux)
+	
     // Register authentication handlers
     RegisterAuthHandlers(mux)
 
