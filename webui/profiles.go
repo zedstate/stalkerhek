@@ -847,7 +847,8 @@ func RegisterProfileHandlers(mux *http.ServeMux, onStart func()) {
       </div>
     </div>
 
-    <!-- Wizard stepper (reactive single-page flow) -->
+    
+<!-- Wizard stepper (reactive single-page flow) -->
     <div class="wizard" role="navigation" aria-label="Wizard">
       <div class="wstep" :class="step==='create' ? 'active' : ''" @click="go('create')" title="Create or edit profiles">
         <i class="fa-solid fa-plus"></i>
@@ -860,6 +861,11 @@ func RegisterProfileHandlers(mux *http.ServeMux, onStart func()) {
 	  <div class="wstep" :class="step==='advanced' ? 'active' : ''" @click="go('advanced')" title="Advanced settings">
 		<i class="fa-solid fa-sliders"></i>
 		<div class="wmeta"><div class="wtitle">Advanced</div><div class="wdesc">Stability / Tuning</div></div>
+	  </div>
+      <!-- Search Tab -->
+	  <div class="wstep" :class="step==='search' ? 'active' : ''" @click="window.open('/search', '_blank')" title="Cross-profile channel search">
+		<i class="fa-solid fa-magnifying-glass"></i>
+		<div class="wmeta"><div class="wtitle">Search</div><div class="wdesc">Find channels across profiles</div></div>
 	  </div>
     </div>
 
