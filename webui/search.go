@@ -65,25 +65,20 @@ async function performSearch() {
         }
 
         let html = '<h2>Results</h2>';
-        data.results.forEach(group => {
-            html += `
-            <div class="result-group">
-                <div class="profile-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-                    <span>${group.profile_name} — ${group.total} channels</span>
-                    <span>▼</span>
-                </div>
-                <div class="channels" style="display:none">
-                    ${group.channels.map(ch => `
-                        <div class="channel">
-                            <div>
-                                <strong>${ch.title}</strong><br>
-                                <small>${ch.genre}</small>
-                            </div>
-                            <div><span class="pill ${ch.enabled ? 'ok' : 'bad'}">${ch.enabled ? 'Enabled' : 'Disabled'}</span></div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>`;
+        data.results.forEach(function(group) {
+            html += '<div class="result-group">' +
+                '<div class="profile-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === \'none\' ? \'block\' : \'none\'">' +
+                    '<span>' + group.profile_name + ' — ' + group.total + ' channels</span>' +
+                    '<span>▼</span>' +
+                '</div>' +
+                '<div class="channels" style="display:none">' +
+                    group.channels.map(function(ch) {
+                        return '<div class="channel">' +
+                            '<div><strong>' + ch.title + '</strong><br><small>' + ch.genre + '</small></div>' +
+                            '<div><span class="pill ' + (ch.enabled ? 'ok' : 'bad') + '">' + (ch.enabled ? 'Enabled' : 'Disabled') + '</span></div>' +
+                        '</div>';
+                    }).join('') +
+                '</div></div>';
         });
         resultsDiv.innerHTML = html;
     } catch(e) {
@@ -91,7 +86,7 @@ async function performSearch() {
     }
 }
 
-qInput.addEventListener('input', () => {
+qInput.addEventListener('input', function() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(performSearch, 350);
 });
