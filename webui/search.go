@@ -21,20 +21,29 @@ func RegisterSearchPage(mux *http.ServeMux) {
         body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#0a0f0a; color:#e6e6e6; }
         .container { max-width:1280px; margin:0 auto; padding:20px; }
         h1 { color:var(--green); margin-bottom:20px; }
-        input#q { width:100%; padding:16px; font-size:1.1rem; background:#1a2421; border:2px solid var(--green); border-radius:8px; color:white; margin-bottom:20px; }
+        input#q { width:100%; padding:16px; font-size:1.1rem; background:#1a2421; border:2px solid var(--green); border-radius:8px; color:white; margin-bottom:15px; }
+        .controls { margin-bottom:20px; display:flex; gap:10px; }
         .result-group { background:#141a2a; border:1px solid var(--green); border-radius:8px; margin-bottom:20px; overflow:hidden; }
         .profile-header { padding:14px 18px; background:#1f2a24; display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-weight:bold; }
         .channels { padding:12px; max-height:600px; overflow-y:auto; }
-        .channel { display:grid; grid-template-columns: 1fr auto; gap:16px; padding:12px; border-bottom:1px solid #2a3a2f; align-items:center; }
+        .channel { display:grid; grid-template-columns: 1fr auto auto; gap:16px; padding:12px; border-bottom:1px solid #2a3a2f; align-items:center; }
         .pill { padding:6px 14px; border-radius:9999px; font-size:0.9em; font-weight:500; }
         .ok { background:#2d7a4e; color:white; } 
         .bad { background:#9f3a38; color:white; }
+        button { padding:6px 12px; border:none; border-radius:6px; cursor:pointer; font-size:0.9em; }
+        .genre-btn { background:#3b5a7a; color:white; }
     </style>
 </head>
 <body>
 <div class="container">
     <h1><i class="fa-solid fa-magnifying-glass"></i> Cross-Profile Channel Search</h1>
     <input type="text" id="q" placeholder="Search channel titles (regex supported, e.g. espn|cincinnati|fox)" autofocus>
+    
+    <div class="controls">
+        <button onclick="expandAll()">Expand All</button>
+        <button onclick="collapseAll()">Collapse All</button>
+    </div>
+
     <div id="results">Enter a search term above...</div>
 </div>
 
@@ -65,20 +74,26 @@ async function performSearch() {
         }
 
         let html = '<h2>Results</h2>';
-        data.results.forEach(function(group) {
-            html += '<div class="result-group">' +
-                '<div class="profile-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === \'none\' ? \'block\' : \'none\'">' +
-                    '<span>' + group.profile_name + ' — ' + group.total + ' channels</span>' +
-                    '<span>▼</span>' +
-                '</div>' +
-                '<div class="channels" style="display:none">' +
-                    group.channels.map(function(ch) {
-                        return '<div class="channel">' +
-                            '<div><strong>' + ch.title + '</strong><br><small>' + ch.genre + '</small></div>' +
-                            '<div><span class="pill ' + (ch.enabled ? 'ok' : 'bad') + '">' + (ch.enabled ? 'Enabled' : 'Disabled') + '</span></div>' +
-                        '</div>';
-                    }).join('') +
-                '</div></div>';
+        data.results.forEach(group => {
+            html += `
+            <div class="result-group">
+                <div class="profile-header" onclick="toggleGroup(this)">
+                    <span>${group.profile_name} — ${group.total} channels</span>
+                    <span>▼</span>
+                </div>
+                <div class="channels" style="display:none">
+                    ${group.channels.map(ch => `
+                        <div class="channel">
+                            <div>
+                                <strong>${ch.title}</strong><br>
+                                <small>${ch.genre}</small>
+                            </div>
+                            <div><span class="pill ${ch.enabled ? 'ok' : 'bad'}">${ch.enabled ? 'Enabled' : 'Disabled'}</span></div>
+                            <div><button class="genre-btn" onclick="toggleGenre(event, ${group.profile_id}, '${ch.genre_id}', '${ch.genre.replace(/'/g, "\\'")}')">Toggle Genre</button></div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
         });
         resultsDiv.innerHTML = html;
     } catch(e) {
@@ -86,7 +101,48 @@ async function performSearch() {
     }
 }
 
-qInput.addEventListener('input', function() {
+function toggleGroup(header) {
+    const content = header.nextElementSibling;
+    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+}
+
+function expandAll() {
+    document.querySelectorAll('.channels').forEach(el => el.style.display = 'block');
+}
+
+function collapseAll() {
+    document.querySelectorAll('.channels').forEach(el => el.style.display = 'none');
+}
+
+async function toggleGenre(e, profileId, genreId, genreName) {
+    e.stopImmediatePropagation();
+    
+    if (!confirm(`Toggle entire genre "${genreName}" for this profile?\n\nThis will affect ALL channels in that genre.`)) {
+        return;
+    }
+
+    try {
+        const form = new FormData();
+        form.append('id', profileId);
+        form.append('genre_id', genreId);
+        
+        const res = await fetch('/api/filters/toggle_genre', {
+            method: 'POST',
+            body: form
+        });
+
+        if (res.ok) {
+            alert('Genre toggled successfully. Refreshing results...');
+            performSearch(); // auto refresh
+        } else {
+            alert('Failed to toggle genre');
+        }
+    } catch(err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+qInput.addEventListener('input', () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(performSearch, 350);
 });
