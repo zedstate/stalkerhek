@@ -55,12 +55,12 @@ async function performSearch() {
         const data = await res.json();
 
         if (data.error) {
-            resultsDiv.innerHTML = `<p style="color:#ff6666">Error: ${data.error}</p>`;
+            resultsDiv.innerHTML = '<p style="color:#ff6666">Error: ' + data.error + '</p>';
             return;
         }
 
         if (!data.results || data.results.length === 0) {
-            resultsDiv.innerHTML = `<p>No matching channels found for <strong>"${q}"</strong></p>`;
+            resultsDiv.innerHTML = '<p>No matching channels found for <strong>"' + q + '"</strong></p>';
             return;
         }
 
