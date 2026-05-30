@@ -14,19 +14,21 @@ import (
 
 // ProfileStatus represents per-profile status in dashboard
 type ProfileStatus struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Phase    string `json:"phase"`
-	Message  string `json:"message"`
-	Channels int    `json:"channels"`
-	TimeZone string `json:"timezone"`
-	SampleChannels []string `json:"sample_channels"`
-	CategoriesCount int `json:"categories_count"`
+	ID               int      `json:"id"`
+	Name             string   `json:"name"`
+	Phase            string   `json:"phase"`
+	Message          string   `json:"message"`
+	Channels         int      `json:"channels"`
+	EnabledChannels  int      `json:"enabled_channels"`
+	HlsPort          int      `json:"hls_port"`
+	TimeZone         string   `json:"timezone"`
+	SampleChannels   []string `json:"sample_channels"`
+	CategoriesCount  int      `json:"categories_count"`
 	SampleCategories []string `json:"sample_categories"`
-	HLS      string `json:"hls"`
-	Proxy    string `json:"proxy"`
-	Running  bool   `json:"running"`
-	Busy     bool   `json:"busy"`
+	HLS              string   `json:"hls"`
+	Proxy            string   `json:"proxy"`
+	Running          bool     `json:"running"`
+	Busy             bool     `json:"busy"`
 }
 
 var (
@@ -108,25 +110,62 @@ func SetProfileStopping(id int) {
 	psMu.Unlock()
 }
 
+// countEnabledChannels returns the number of channels currently passing
+// the filter for a given profile. Called inline at poll time so it always
+// reflects the latest filter state without requiring a restart.
+func countEnabledChannels(profileID int) int {
+	chs, _, ok := GetProfileChannels(profileID)
+	if !ok || chs == nil {
+		return 0
+	}
+	n := 0
+	for _, ch := range chs {
+		if ch == nil {
+			continue
+		}
+		if filterstore.IsAllowed(profileID, ch) {
+			n++
+		}
+	}
+	return n
+}
+
 // RegisterProfileStatusHandlers mounts /api/profile_status for polling
 func RegisterProfileStatusHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/profile_status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+
+		// Snapshot stored state
 		psMu.RLock()
 		arr := make([]ProfileStatus, 0, len(pstate))
 		for _, v := range pstate {
 			arr = append(arr, v)
 		}
 		psMu.RUnlock()
+
+		// Snapshot busy flags
 		startMu.Lock()
 		busySnap := make(map[int]bool, len(startBusy))
 		for k, v := range startBusy {
 			busySnap[k] = v
 		}
 		startMu.Unlock()
+
+		// Build a quick lookup of HLS port per profile ID from the profile list
+		hlsPorts := make(map[int]int, len(arr))
+		for _, p := range ListProfiles() {
+			hlsPorts[p.ID] = p.HlsPort
+		}
+
+		// Enrich each status entry with live-computed fields
 		for i := range arr {
 			arr[i].Busy = busySnap[arr[i].ID]
+			arr[i].HlsPort = hlsPorts[arr[i].ID]
+			if arr[i].Running {
+				arr[i].EnabledChannels = countEnabledChannels(arr[i].ID)
+			}
 		}
+
 		sort.Slice(arr, func(i, j int) bool { return arr[i].ID < arr[j].ID })
 		_ = json.NewEncoder(w).Encode(arr)
 	})
@@ -274,7 +313,16 @@ func RegisterProfileStatusHandlers(mux *http.ServeMux) {
 }
 
 // helper: safe atoi
-func atoiSafe(s string) int { n := 0; for _, c := range s { if c < '0' || c > '9' { break }; n = n*10 + int(c-'0') }; return n }
+func atoiSafe(s string) int {
+	n := 0
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			break
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n
+}
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
@@ -289,14 +337,14 @@ func linkForHost(raw string, port int) string {
 
 // DefaultPortal returns a baseline Portal config used for verification
 func DefaultPortal() *stalker.Portal {
-return &stalker.Portal{
-Model:        "MAG254",
-SerialNumber: "0000000000000",
-DeviceID:     strings.Repeat("f", 64),
-DeviceID2:    strings.Repeat("f", 64),
-Signature:    strings.Repeat("f", 64),
-TimeZone:     "UTC",
-DeviceIdAuth: true,
-WatchDogTime: 5,
-}
+	return &stalker.Portal{
+		Model:        "MAG254",
+		SerialNumber: "0000000000000",
+		DeviceID:     strings.Repeat("f", 64),
+		DeviceID2:    strings.Repeat("f", 64),
+		Signature:    strings.Repeat("f", 64),
+		TimeZone:     "UTC",
+		DeviceIdAuth: true,
+		WatchDogTime: 5,
+	}
 }

@@ -1348,7 +1348,9 @@ func RegisterProfileHandlers(mux *http.ServeMux, onStart func()) {
           let lines=[];
           if(s.message) lines.push(s.message);
           if(s.phase==='error') lines.push('Tip: open Instance Logs for details.');
-          if(s.channels) lines.push('Channels: '+s.channels);
+          if(s.hls_port) lines.push('HLS port: '+s.hls_port);
+          if(s.channels) lines.push('Available channels: '+s.channels);
+          if(s.running && s.enabled_channels != null) lines.push('Active channels: '+s.enabled_channels);
           if(s.busy) lines.push('Starting in progress…');
           if(lines.length===0) lines.push('');
           meta.innerHTML = '<div>'+lines.map(x=>String(x).replace(/</g,'&lt;')).join('</div><div>')+'</div>';
@@ -2697,3 +2699,7 @@ func DeleteProfile(id int) {
     }
     profiles = out
 }
+
+
+
+================================================
