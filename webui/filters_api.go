@@ -598,6 +598,7 @@ var _ = stalker.Channel{}
 
 type searchChannelInfo struct {
 	Title   string `json:"title"`
+	CMD     string `json:"cmd"`
 	Genre   string `json:"genre"`
 	GenreID string `json:"genre_id"`
 	Enabled bool   `json:"enabled"`
@@ -663,6 +664,7 @@ func RegisterSearchHandlers(mux *http.ServeMux) {
 				if re.MatchString(title) {
 					matches = append(matches, searchChannelInfo{
 						Title:   title,
+						CMD:     strings.TrimSpace(ch.CMD),
 						Genre:   ch.Genre(),
 						GenreID: ch.GenreID,
 						Enabled: filterstore.IsAllowed(p.ID, ch),
