@@ -22,10 +22,18 @@ func RegisterSearchPage(mux *http.ServeMux) {
         .container { max-width:1280px; margin:0 auto; padding:20px; }
         h1 { color:var(--green); margin-bottom:20px; }
         input#q { width:100%; padding:16px; font-size:1.1rem; background:#1a2421; border:2px solid var(--green); border-radius:8px; color:white; margin-bottom:15px; box-sizing:border-box; outline:none; }
-        input#q:focus { box-shadow: 0 0 0 3px rgba(45,122,78,.25); }
-        .controls { margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; }
-        .controls button { background:#1f2a24; color:#e6e6e6; border:1px solid var(--green); border-radius:6px; padding:8px 14px; cursor:pointer; font-size:0.9em; }
+        input#q:focus { box-shadow:0 0 0 3px rgba(45,122,78,.25); }
+        .controls { margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .controls button {
+            background:#1f2a24; color:#e6e6e6; border:1px solid var(--green);
+            border-radius:6px; padding:8px 14px; cursor:pointer; font-size:0.9em;
+            display:inline-flex; align-items:center; gap:6px; transition:background .15s, border-color .15s;
+        }
         .controls button:hover { background:#2d3a30; }
+        .controls button.active {
+            background:rgba(45,122,78,.35); border-color:#5fb970; color:#bfffd3;
+        }
+        .controls button.active:hover { background:rgba(45,122,78,.5); }
         .result-group { background:#141a2a; border:1px solid var(--green); border-radius:8px; margin-bottom:20px; overflow:hidden; }
         .profile-header { padding:14px 18px; background:#1f2a24; display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-weight:bold; user-select:none; }
         .profile-header .arrow { transition:transform 0.2s ease; display:inline-block; }
@@ -33,8 +41,6 @@ func RegisterSearchPage(mux *http.ServeMux) {
         .channels { padding:12px; max-height:600px; overflow-y:auto; }
         .channel { display:grid; grid-template-columns:1fr auto auto; gap:16px; padding:12px; border-bottom:1px solid #2a3a2f; align-items:center; }
         .channel:last-child { border-bottom:none; }
-
-        /* channel toggle button — styled like a pill but clickable */
         .ch-toggle {
             padding:6px 14px; border-radius:9999px; font-size:0.9em; font-weight:500;
             border:none; cursor:pointer; transition:filter .15s, transform .1s;
@@ -43,19 +49,21 @@ func RegisterSearchPage(mux *http.ServeMux) {
         .ch-toggle:active { transform:scale(.96); }
         .ch-toggle.enabled  { background:var(--green); color:white; }
         .ch-toggle.enabled:hover  { filter:brightness(1.15); }
-        .ch-toggle.disabled { background:var(--red);   color:white; }
+        .ch-toggle.disabled { background:var(--red); color:white; }
         .ch-toggle.disabled:hover { filter:brightness(1.15); }
-
-        /* genre toggle button */
         .genre-btn {
             padding:6px 12px; border:none; border-radius:6px; cursor:pointer;
-            font-size:0.85em; font-weight:500; white-space:nowrap;
-            transition:filter .15s;
+            font-size:0.85em; font-weight:500; white-space:nowrap; transition:filter .15s;
         }
         .genre-btn.will-disable { background:#3b5a7a; color:white; }
         .genre-btn.will-disable:hover { filter:brightness(1.2); }
         .genre-btn.will-enable  { background:#4a6a3a; color:white; }
         .genre-btn.will-enable:hover  { filter:brightness(1.2); }
+        /* empty-group notice shown when hide-disabled filters everything out */
+        .all-hidden-notice {
+            padding:12px 16px; color:#9aaa9a; font-size:0.9em; font-style:italic;
+            display:none;
+        }
     </style>
 </head>
 <body>
@@ -66,6 +74,9 @@ func RegisterSearchPage(mux *http.ServeMux) {
     <div class="controls">
         <button onclick="expandAll()"><i class="fa-solid fa-angles-down"></i> Expand All</button>
         <button onclick="collapseAll()"><i class="fa-solid fa-angles-up"></i> Collapse All</button>
+        <button id="hideDisabledBtn" onclick="toggleHideDisabled()">
+            <i class="fa-solid fa-eye-slash"></i> Hide Disabled
+        </button>
     </div>
 
     <div id="results">Enter a search term above...</div>
@@ -74,8 +85,9 @@ func RegisterSearchPage(mux *http.ServeMux) {
 <script>
 // ─── Persistence ──────────────────────────────────────────────────────────
 
-const LS_QUERY_KEY  = 'stalkerhek_search_query';
-const LS_EXPAND_KEY = 'stalkerhek_search_expanded';
+const LS_QUERY_KEY        = 'stalkerhek_search_query';
+const LS_EXPAND_KEY       = 'stalkerhek_search_expanded';
+const LS_HIDE_DISABLED_KEY = 'stalkerhek_search_hide_disabled';
 
 function loadExpandedSet() {
     try {
@@ -85,17 +97,20 @@ function loadExpandedSet() {
         return new Set(Array.isArray(arr) ? arr.map(Number) : []);
     } catch(e) { return new Set(); }
 }
-
 function saveExpandedSet(set) {
     try { localStorage.setItem(LS_EXPAND_KEY, JSON.stringify(Array.from(set))); } catch(e) {}
 }
-
 function loadQuery() {
     try { return localStorage.getItem(LS_QUERY_KEY) || ''; } catch(e) { return ''; }
 }
-
 function saveQuery(q) {
     try { localStorage.setItem(LS_QUERY_KEY, q); } catch(e) {}
+}
+function loadHideDisabled() {
+    try { return localStorage.getItem(LS_HIDE_DISABLED_KEY) === '1'; } catch(e) { return false; }
+}
+function saveHideDisabled(val) {
+    try { localStorage.setItem(LS_HIDE_DISABLED_KEY, val ? '1' : '0'); } catch(e) {}
 }
 
 // ─── State ────────────────────────────────────────────────────────────────
@@ -104,6 +119,7 @@ let debounceTimer;
 const qInput     = document.getElementById('q');
 const resultsDiv = document.getElementById('results');
 let expandedIds  = loadExpandedSet();
+let hideDisabled = loadHideDisabled();
 
 // ─── Escape helpers ───────────────────────────────────────────────────────
 
@@ -112,6 +128,47 @@ function escHtml(s) {
 }
 function escAttr(s) {
     return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+
+// ─── Hide-Disabled filter ─────────────────────────────────────────────────
+
+/** Apply or remove the hide-disabled filter across all rendered channel rows. */
+function applyHideDisabled() {
+    const btn = document.getElementById('hideDisabledBtn');
+    if (btn) btn.classList.toggle('active', hideDisabled);
+
+    document.querySelectorAll('.result-group').forEach(function(group) {
+        const rows   = group.querySelectorAll('.channel');
+        let visible  = 0;
+
+        rows.forEach(function(row) {
+            const toggle = row.querySelector('.ch-toggle');
+            const isDisabled = toggle && toggle.classList.contains('disabled');
+            if (hideDisabled && isDisabled) {
+                row.style.display = 'none';
+            } else {
+                row.style.display = '';
+                visible++;
+            }
+        });
+
+        // Show a notice inside the group when all rows are hidden
+        let notice = group.querySelector('.all-hidden-notice');
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.className = 'all-hidden-notice';
+            notice.textContent = 'All channels in this group are disabled and hidden.';
+            const channelsDiv = group.querySelector('.channels');
+            if (channelsDiv) channelsDiv.appendChild(notice);
+        }
+        notice.style.display = (hideDisabled && visible === 0) ? 'block' : 'none';
+    });
+}
+
+function toggleHideDisabled() {
+    hideDisabled = !hideDisabled;
+    saveHideDisabled(hideDisabled);
+    applyHideDisabled();
 }
 
 // ─── Search & render ──────────────────────────────────────────────────────
@@ -153,14 +210,12 @@ async function performSearch() {
                 '</div>' +
                 '<div class="channels" style="display:' + display + '">' +
                     group.channels.map(function(ch) {
-                        const enabledCls  = ch.enabled ? 'enabled'      : 'disabled';
-                        const toggleLabel = ch.enabled ? 'Enabled'       : 'Disabled';
-                        // genre button: if channel is enabled the genre is at least partially
-                        // enabled, so the action is to disable it — and vice versa.
-                        const genreWillDisable = ch.enabled;
-                        const genreBtnCls      = genreWillDisable ? 'will-disable' : 'will-enable';
-                        const genreBtnLabel    = genreWillDisable ? 'Disable Genre' : 'Enable Genre';
-                        const disabledFlag     = genreWillDisable ? '1' : '0';
+                        const enabledCls   = ch.enabled ? 'enabled'        : 'disabled';
+                        const toggleLabel  = ch.enabled ? 'Enabled'         : 'Disabled';
+                        const willDisable  = ch.enabled;
+                        const genreBtnCls  = willDisable ? 'will-disable'   : 'will-enable';
+                        const genreBtnLbl  = willDisable ? 'Disable Genre'  : 'Enable Genre';
+                        const disabledFlag = willDisable ? '1'              : '0';
 
                         return '<div class="channel">' +
                             '<div><strong>' + escHtml(ch.title) + '</strong><br><small>' + escHtml(ch.genre) + '</small></div>' +
@@ -172,8 +227,10 @@ async function performSearch() {
                             '</div>' +
                             '<div>' +
                                 '<button class="genre-btn ' + genreBtnCls + '" ' +
+                                    'data-genre-id="'   + escHtml(ch.genre_id) + '" ' +
+                                    'data-genre-name="' + escHtml(ch.genre)    + '" ' +
                                     'onclick="toggleGenre(event,' + pid + ',\'' + escAttr(ch.genre_id) + '\',\'' + escAttr(ch.genre) + '\',' + disabledFlag + ')">' +
-                                    genreBtnLabel +
+                                    genreBtnLbl +
                                 '</button>' +
                             '</div>' +
                         '</div>';
@@ -183,6 +240,10 @@ async function performSearch() {
         });
 
         resultsDiv.innerHTML = html;
+
+        // Re-apply hide-disabled filter over the freshly rendered rows
+        applyHideDisabled();
+
     } catch(e) {
         resultsDiv.innerHTML = '<p style="color:red">Failed to load results</p>';
     }
@@ -194,7 +255,7 @@ async function toggleChannel(e, profileId, cmd, currentlyEnabled, btn) {
     e.stopPropagation();
     btn.disabled = true;
 
-    const nowDisabled = currentlyEnabled ? '1' : '0'; // flip
+    const nowDisabled = currentlyEnabled ? '1' : '0';
 
     try {
         const fd = new URLSearchParams();
@@ -207,33 +268,32 @@ async function toggleChannel(e, profileId, cmd, currentlyEnabled, btn) {
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: fd.toString()
         });
-
         if (!res.ok) throw new Error('HTTP ' + res.status);
 
-        // Flip button appearance in-place without a full re-search
-        const nowEnabled = !currentlyEnabled;
-        btn.className    = 'ch-toggle ' + (nowEnabled ? 'enabled' : 'disabled');
-        btn.textContent  = nowEnabled ? 'Enabled' : 'Disabled';
+        const nowEnabled    = !currentlyEnabled;
+        btn.className       = 'ch-toggle ' + (nowEnabled ? 'enabled' : 'disabled');
+        btn.textContent     = nowEnabled ? 'Enabled' : 'Disabled';
 
-        // Update the genre button on the same row to match new channel state
-        const row       = btn.closest('.channel');
-        const genreBtn  = row ? row.querySelector('.genre-btn') : null;
+        // Update adjacent genre button
+        const row      = btn.closest('.channel');
+        const genreBtn = row ? row.querySelector('.genre-btn') : null;
         if (genreBtn) {
-            const willDisable      = nowEnabled;
-            genreBtn.className     = 'genre-btn ' + (willDisable ? 'will-disable' : 'will-enable');
-            genreBtn.textContent   = willDisable ? 'Disable Genre' : 'Enable Genre';
-            // Update the onclick to pass the new disabled flag
-            const gid   = genreBtn.getAttribute('data-genre-id')   || '';
-            const gname = genreBtn.getAttribute('data-genre-name')  || '';
+            const willDisable    = nowEnabled;
+            genreBtn.className   = 'genre-btn ' + (willDisable ? 'will-disable' : 'will-enable');
+            genreBtn.textContent = willDisable ? 'Disable Genre' : 'Enable Genre';
+            const gid   = genreBtn.getAttribute('data-genre-id')  || '';
+            const gname = genreBtn.getAttribute('data-genre-name') || '';
             genreBtn.onclick = function(ev) {
                 toggleGenre(ev, profileId, gid, gname, willDisable ? '1' : '0');
             };
         }
 
-        // Patch the onclick on the button itself with the new state
-        btn.onclick = function(ev) {
-            toggleChannel(ev, profileId, cmd, nowEnabled, btn);
-        };
+        // Patch button's own onclick with new state
+        btn.onclick = function(ev) { toggleChannel(ev, profileId, cmd, nowEnabled, btn); };
+
+        // Re-apply hide filter: enabling a channel should make it visible;
+        // disabling it should hide it if the filter is active.
+        applyHideDisabled();
 
     } catch(err) {
         alert('Failed to toggle channel: ' + err.message);
@@ -267,10 +327,10 @@ async function toggleGenre(e, profileId, genreId, genreName, disabledFlag) {
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: fd.toString()
         });
-
         if (!res.ok) throw new Error('HTTP ' + res.status);
 
-        // Full re-search so all channel pills in this genre reflect new state
+        // Full re-search so all rows in this genre reflect their new state,
+        // and hide-disabled is reapplied by performSearch() automatically.
         performSearch();
 
     } catch(err) {
@@ -322,10 +382,14 @@ function collapseAll() {
 // ─── Boot ─────────────────────────────────────────────────────────────────
 
 (function init() {
+    // Restore button appearance before any search fires
+    const btn = document.getElementById('hideDisabledBtn');
+    if (btn) btn.classList.toggle('active', hideDisabled);
+
     const saved = loadQuery();
     if (saved) {
         qInput.value = saved;
-        performSearch();
+        performSearch(); // applyHideDisabled() is called inside performSearch()
     }
 })();
 
