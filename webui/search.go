@@ -17,7 +17,7 @@ func RegisterSearchPage(mux *http.ServeMux) {
     <title>Search - Stalkerhek</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <style>
-        :root { --green: #2d7a4e; --green-hover: #3a8f5e; --red: #9f3a38; --red-hover: #b84644; }
+        :root { --green: #2d7a4e; --green-hover: #3a8f5e; --red: #9f3a38; --red-hover: #b84644; --border:#1f2e23; }
         body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#0a0f0a; color:#e6e6e6; }
         .container { max-width:1280px; margin:0 auto; padding:20px; }
         h1 { color:var(--green); margin-bottom:20px; }
@@ -37,7 +37,8 @@ func RegisterSearchPage(mux *http.ServeMux) {
         .controls button:hover { background:#2d3a30; }
         .controls button.active { background:rgba(45,122,78,.35); border-color:#5fb970; color:#bfffd3; }
         .controls button.active:hover { background:rgba(45,122,78,.5); }
-        .controls button.flash { background:rgba(45,122,78,.6); border-color:#5fb970; color:#ffffff; }
+
+        /* Results */
         .result-group { background:#141a2a; border:1px solid var(--green); border-radius:8px; margin-bottom:20px; overflow:hidden; }
         .profile-header {
             padding:14px 18px; background:#1f2a24; display:flex;
@@ -70,12 +71,85 @@ func RegisterSearchPage(mux *http.ServeMux) {
         .genre-btn.will-enable        { background:#4a6a3a; color:white; }
         .genre-btn.will-enable:hover  { filter:brightness(1.2); }
         .all-hidden-notice {
-            padding:12px 16px; color:#9aaa9a; font-size:0.9em;
-            font-style:italic; display:none;
+            padding:12px 16px; color:#9aaa9a; font-size:0.9em; font-style:italic; display:none;
         }
+
+        /* Export modal */
+        .modal-overlay {
+            display:none; position:fixed; inset:0;
+            background:rgba(0,0,0,.72); z-index:100;
+            align-items:center; justify-content:center; padding:20px;
+        }
+        .modal-overlay.open { display:flex; }
+        .modal-box {
+            background:linear-gradient(180deg,rgba(17,24,21,.98),rgba(13,20,16,.97));
+            border:1px solid var(--border); border-radius:16px;
+            padding:24px; width:100%; max-width:640px;
+            box-shadow:0 24px 64px rgba(0,0,0,.6);
+            display:flex; flex-direction:column; gap:14px;
+            max-height:90vh;
+        }
+        .modal-header {
+            display:flex; align-items:center; justify-content:space-between; gap:12px;
+        }
+        .modal-title { font-size:16px; font-weight:700; color:#e6f2e6; }
+        .modal-sub   { font-size:13px; color:#9aaa9a; margin-top:2px; }
+        .modal-close {
+            background:none; border:none; color:#9aaa9a; font-size:20px;
+            cursor:pointer; padding:4px 8px; border-radius:6px; line-height:1;
+            transition:color .15s, background .15s;
+        }
+        .modal-close:hover { color:#e6e6e6; background:rgba(255,255,255,.08); }
+        .modal-textarea {
+            width:100%; flex:1 1 auto; min-height:260px; max-height:50vh;
+            background:#0d1410; border:1px solid var(--border); border-radius:10px;
+            color:#c8dcc8; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,
+                           Consolas,"Liberation Mono","Courier New",monospace;
+            font-size:13px; line-height:1.55; padding:12px; resize:vertical;
+            outline:none; box-sizing:border-box;
+        }
+        .modal-textarea:focus { border-color:var(--green); box-shadow:0 0 0 3px rgba(45,122,78,.2); }
+        .modal-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+        .modal-btn {
+            background:#1f2a24; color:#e6e6e6; border:1px solid var(--border);
+            border-radius:8px; padding:10px 16px; cursor:pointer; font-size:0.9em;
+            display:inline-flex; align-items:center; gap:7px;
+            transition:background .15s, border-color .15s;
+        }
+        .modal-btn:hover { background:#2d3a30; border-color:var(--green); }
+        .modal-btn.primary { background:var(--green); border-color:var(--green); color:white; }
+        .modal-btn.primary:hover { background:var(--green-hover); }
+        .modal-count { font-size:12px; color:#9aaa9a; margin-left:auto; }
     </style>
 </head>
 <body>
+
+<!-- Export modal -->
+<div class="modal-overlay" id="exportModal" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+    <div class="modal-box">
+        <div class="modal-header">
+            <div>
+                <div class="modal-title" id="exportModalTitle">
+                    <i class="fa-solid fa-clipboard"></i> Enabled Channel Names
+                </div>
+                <div class="modal-sub">Select All then Ctrl+C / Cmd+C to copy</div>
+            </div>
+            <button class="modal-close" onclick="closeExportModal()" aria-label="Close">&times;</button>
+        </div>
+        <textarea class="modal-textarea" id="exportTextarea" readonly
+            spellcheck="false" autocomplete="off"></textarea>
+        <div class="modal-actions">
+            <button class="modal-btn primary" onclick="selectAllExport()">
+                <i class="fa-solid fa-arrow-pointer"></i> Select All
+            </button>
+            <button class="modal-btn" onclick="closeExportModal()">
+                <i class="fa-solid fa-xmark"></i> Close
+            </button>
+            <span class="modal-count" id="exportCount"></span>
+        </div>
+    </div>
+</div>
+
 <div class="container">
     <h1><i class="fa-solid fa-magnifying-glass"></i> Cross-Profile Channel Search</h1>
     <input type="text" id="q"
@@ -118,18 +192,10 @@ function loadExpandedSet() {
 function saveExpandedSet(set) {
     try { localStorage.setItem(LS_EXPAND_KEY, JSON.stringify(Array.from(set))); } catch(e) {}
 }
-function loadQuery()  {
-    try { return localStorage.getItem(LS_QUERY_KEY) || ''; } catch(e) { return ''; }
-}
-function saveQuery(q) {
-    try { localStorage.setItem(LS_QUERY_KEY, q); } catch(e) {}
-}
-function loadHideDisabled() {
-    try { return localStorage.getItem(LS_HIDE_DISABLED_KEY) === '1'; } catch(e) { return false; }
-}
-function saveHideDisabled(val) {
-    try { localStorage.setItem(LS_HIDE_DISABLED_KEY, val ? '1' : '0'); } catch(e) {}
-}
+function loadQuery()  { try { return localStorage.getItem(LS_QUERY_KEY) || ''; } catch(e) { return ''; } }
+function saveQuery(q) { try { localStorage.setItem(LS_QUERY_KEY, q); } catch(e) {} }
+function loadHideDisabled()     { try { return localStorage.getItem(LS_HIDE_DISABLED_KEY) === '1'; } catch(e) { return false; } }
+function saveHideDisabled(val)  { try { localStorage.setItem(LS_HIDE_DISABLED_KEY, val ? '1' : '0'); } catch(e) {} }
 
 // ─── State ────────────────────────────────────────────────────────────────
 
@@ -150,100 +216,86 @@ function escAttr(s) {
 
 // ─── M3U8 title sanitization (mirrors stalker/normalize.go) ──────────────
 //
-// StripSuperscripts: removes the same Unicode ranges as the Go implementation.
-//   U+00B2–U+00B3, U+00B9            legacy superscript digits ²³¹
-//   U+02B0–U+02FF                    Spacing Modifier Letters
-//   U+1D00–U+1DBF                    Phonetic Extensions + Supplement
-//   U+2069                           Pop Directional Isolate
-//   U+2070–U+209F                    Superscripts and Subscripts block
-//   U+2600–U+26FF                    Miscellaneous Symbols
-//   U+2C60–U+2C7F                    Latin Extended-C modifiers
-//
-// CleanTitleForM3U8: strips superscripts, collapses orphaned mid-string
-// punctuation (e.g. " / " left when both sides were decorators), trims.
+// Unicode ranges stripped — identical to Go StripSuperscripts():
+//   U+00B2–U+00B3, U+00B9   legacy superscript digits ²³¹
+//   U+02B0–U+02FF            Spacing Modifier Letters  (ᶠᵖˢ …)
+//   U+1D00–U+1DBF            Phonetic Extensions       (ᴴᴰᴿᴬᵂ …)
+//   U+2069                   Pop Directional Isolate
+//   U+2070–U+209F            Superscripts & Subscripts block
+//   U+2600–U+26FF            Miscellaneous Symbols     (☼ ★ …)
+//   U+2C60–U+2C7F            Latin Extended-C          (ⱽ …)
 
 function stripSuperscripts(s) {
-    // Replace each character in the stripped ranges with empty string,
-    // then collapse runs of whitespace.
-    return s.replace(
-        /[\u00B2\u00B3\u00B9\u02B0-\u02FF\u1D00-\u1DBF\u2069\u2070-\u209F\u2600-\u26FF\u2C60-\u2C7F]/g,
-        ''
-    ).replace(/\s+/g, ' ').trim();
+    return s
+        .replace(/[\u00B2\u00B3\u00B9\u02B0-\u02FF\u1D00-\u1DBF\u2069\u2070-\u209F\u2600-\u26FF\u2C60-\u2C7F]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function cleanTitleForM3U8(s) {
     s = stripSuperscripts(s);
     if (!s) return '';
-    // Collapse punctuation-only runs surrounded by whitespace
-    // mirrors: orphanMidPunctRE = \s[/\-_,;:.]+\s  => single space
+    // Collapse orphaned punctuation runs surrounded by whitespace
+    // mirrors: orphanMidPunctRE = \s[/\-_,;:.]+\s => single space
     s = s.replace(/\s[\/\-_,;:.]+\s/g, ' ');
     return s.trim();
 }
 
-// ─── Export enabled channel names ─────────────────────────────────────────
+// ─── Export modal ─────────────────────────────────────────────────────────
 
 function exportEnabled() {
-    const btn  = document.getElementById('exportBtn');
-    const seen = new Set();
+    const seen  = new Set();
     const names = [];
 
-    // Walk ALL .channel rows across all groups, regardless of expand state.
-    // A group being collapsed only hides the .channels div; the rows are
-    // still in the DOM with their toggle buttons intact.
+    // Walk ALL .channel rows across all groups — collapsed groups are hidden
+    // visually but their rows remain in the DOM with buttons intact.
     document.querySelectorAll('.channel').forEach(function(row) {
         const toggle = row.querySelector('.ch-toggle');
         if (!toggle || !toggle.classList.contains('enabled')) return;
-
-        // Raw title is in the first cell's <strong>
         const strong = row.querySelector('strong');
         if (!strong) return;
-        const raw       = strong.textContent || '';
-        const sanitized = cleanTitleForM3U8(raw);
+        const sanitized = cleanTitleForM3U8(strong.textContent || '');
         if (!sanitized || seen.has(sanitized)) return;
         seen.add(sanitized);
         names.push(sanitized);
     });
 
+    const ta    = document.getElementById('exportTextarea');
+    const count = document.getElementById('exportCount');
+
     if (names.length === 0) {
-        btn.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Nothing to copy';
-        btn.classList.add('active');
-        setTimeout(function() {
-            btn.innerHTML = '<i class="fa-solid fa-clipboard"></i> Copy Enabled Names';
-            btn.classList.remove('active');
-        }, 2000);
-        return;
+        ta.value       = '(no enabled channels found in current results)';
+        count.textContent = '';
+    } else {
+        ta.value          = names.join('\n');
+        count.textContent = names.length + ' channel' + (names.length === 1 ? '' : 's');
     }
 
-    const text = names.join('\n');
+    document.getElementById('exportModal').classList.add('open');
 
-    navigator.clipboard.writeText(text).then(function() {
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied ' + names.length + ' names!';
-        btn.classList.add('flash');
-        setTimeout(function() {
-            btn.innerHTML = '<i class="fa-solid fa-clipboard"></i> Copy Enabled Names';
-            btn.classList.remove('flash');
-        }, 2200);
-    }).catch(function() {
-        // Fallback for browsers that block clipboard in non-secure contexts
-        try {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied ' + names.length + ' names!';
-            btn.classList.add('flash');
-            setTimeout(function() {
-                btn.innerHTML = '<i class="fa-solid fa-clipboard"></i> Copy Enabled Names';
-                btn.classList.remove('flash');
-            }, 2200);
-        } catch(e) {
-            alert('Clipboard unavailable. Here are the names:\n\n' + text);
-        }
-    });
+    // Auto-select so user can hit Ctrl+C immediately without an extra click
+    setTimeout(function() { ta.select(); }, 60);
 }
+
+function selectAllExport() {
+    const ta = document.getElementById('exportTextarea');
+    ta.focus();
+    ta.select();
+}
+
+function closeExportModal() {
+    document.getElementById('exportModal').classList.remove('open');
+}
+
+// Close on overlay click (outside the box)
+document.getElementById('exportModal').addEventListener('click', function(e) {
+    if (e.target === this) closeExportModal();
+});
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeExportModal();
+});
 
 // ─── Hide-Disabled filter ─────────────────────────────────────────────────
 
