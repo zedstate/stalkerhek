@@ -21,61 +21,79 @@ func RegisterSearchPage(mux *http.ServeMux) {
         body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#0a0f0a; color:#e6e6e6; }
         .container { max-width:1280px; margin:0 auto; padding:20px; }
         h1 { color:var(--green); margin-bottom:20px; }
-        input#q { width:100%; padding:16px; font-size:1.1rem; background:#1a2421; border:2px solid var(--green); border-radius:8px; color:white; margin-bottom:15px; box-sizing:border-box; outline:none; }
+        input#q {
+            width:100%; padding:16px; font-size:1.1rem; background:#1a2421;
+            border:2px solid var(--green); border-radius:8px; color:white;
+            margin-bottom:15px; box-sizing:border-box; outline:none;
+        }
         input#q:focus { box-shadow:0 0 0 3px rgba(45,122,78,.25); }
         .controls { margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
         .controls button {
             background:#1f2a24; color:#e6e6e6; border:1px solid var(--green);
             border-radius:6px; padding:8px 14px; cursor:pointer; font-size:0.9em;
-            display:inline-flex; align-items:center; gap:6px; transition:background .15s, border-color .15s;
+            display:inline-flex; align-items:center; gap:6px;
+            transition:background .15s, border-color .15s, color .15s;
         }
         .controls button:hover { background:#2d3a30; }
-        .controls button.active {
-            background:rgba(45,122,78,.35); border-color:#5fb970; color:#bfffd3;
-        }
+        .controls button.active { background:rgba(45,122,78,.35); border-color:#5fb970; color:#bfffd3; }
         .controls button.active:hover { background:rgba(45,122,78,.5); }
+        .controls button.flash { background:rgba(45,122,78,.6); border-color:#5fb970; color:#ffffff; }
         .result-group { background:#141a2a; border:1px solid var(--green); border-radius:8px; margin-bottom:20px; overflow:hidden; }
-        .profile-header { padding:14px 18px; background:#1f2a24; display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-weight:bold; user-select:none; }
+        .profile-header {
+            padding:14px 18px; background:#1f2a24; display:flex;
+            justify-content:space-between; align-items:center;
+            cursor:pointer; font-weight:bold; user-select:none;
+        }
         .profile-header .arrow { transition:transform 0.2s ease; display:inline-block; }
         .profile-header.open .arrow { transform:rotate(180deg); }
         .channels { padding:12px; max-height:600px; overflow-y:auto; }
-        .channel { display:grid; grid-template-columns:1fr auto auto; gap:16px; padding:12px; border-bottom:1px solid #2a3a2f; align-items:center; }
+        .channel {
+            display:grid; grid-template-columns:1fr auto auto;
+            gap:16px; padding:12px; border-bottom:1px solid #2a3a2f; align-items:center;
+        }
         .channel:last-child { border-bottom:none; }
         .ch-toggle {
             padding:6px 14px; border-radius:9999px; font-size:0.9em; font-weight:500;
-            border:none; cursor:pointer; transition:filter .15s, transform .1s;
-            white-space:nowrap;
+            border:none; cursor:pointer; transition:filter .15s, transform .1s; white-space:nowrap;
         }
         .ch-toggle:active { transform:scale(.96); }
-        .ch-toggle.enabled  { background:var(--green); color:white; }
+        .ch-toggle.enabled        { background:var(--green); color:white; }
         .ch-toggle.enabled:hover  { filter:brightness(1.15); }
-        .ch-toggle.disabled { background:var(--red); color:white; }
+        .ch-toggle.disabled       { background:var(--red);   color:white; }
         .ch-toggle.disabled:hover { filter:brightness(1.15); }
         .genre-btn {
             padding:6px 12px; border:none; border-radius:6px; cursor:pointer;
             font-size:0.85em; font-weight:500; white-space:nowrap; transition:filter .15s;
         }
-        .genre-btn.will-disable { background:#3b5a7a; color:white; }
+        .genre-btn.will-disable       { background:#3b5a7a; color:white; }
         .genre-btn.will-disable:hover { filter:brightness(1.2); }
-        .genre-btn.will-enable  { background:#4a6a3a; color:white; }
+        .genre-btn.will-enable        { background:#4a6a3a; color:white; }
         .genre-btn.will-enable:hover  { filter:brightness(1.2); }
-        /* empty-group notice shown when hide-disabled filters everything out */
         .all-hidden-notice {
-            padding:12px 16px; color:#9aaa9a; font-size:0.9em; font-style:italic;
-            display:none;
+            padding:12px 16px; color:#9aaa9a; font-size:0.9em;
+            font-style:italic; display:none;
         }
     </style>
 </head>
 <body>
 <div class="container">
     <h1><i class="fa-solid fa-magnifying-glass"></i> Cross-Profile Channel Search</h1>
-    <input type="text" id="q" placeholder="Search channel titles (regex supported, e.g. espn|cincinnati|fox)" autofocus>
+    <input type="text" id="q"
+        placeholder="Search channel titles (regex supported, e.g. espn|cincinnati|fox)"
+        autofocus>
 
     <div class="controls">
-        <button onclick="expandAll()"><i class="fa-solid fa-angles-down"></i> Expand All</button>
-        <button onclick="collapseAll()"><i class="fa-solid fa-angles-up"></i> Collapse All</button>
+        <button onclick="expandAll()">
+            <i class="fa-solid fa-angles-down"></i> Expand All
+        </button>
+        <button onclick="collapseAll()">
+            <i class="fa-solid fa-angles-up"></i> Collapse All
+        </button>
         <button id="hideDisabledBtn" onclick="toggleHideDisabled()">
             <i class="fa-solid fa-eye-slash"></i> Hide Disabled
+        </button>
+        <button id="exportBtn" onclick="exportEnabled()">
+            <i class="fa-solid fa-clipboard"></i> Copy Enabled Names
         </button>
     </div>
 
@@ -85,8 +103,8 @@ func RegisterSearchPage(mux *http.ServeMux) {
 <script>
 // ─── Persistence ──────────────────────────────────────────────────────────
 
-const LS_QUERY_KEY        = 'stalkerhek_search_query';
-const LS_EXPAND_KEY       = 'stalkerhek_search_expanded';
+const LS_QUERY_KEY         = 'stalkerhek_search_query';
+const LS_EXPAND_KEY        = 'stalkerhek_search_expanded';
 const LS_HIDE_DISABLED_KEY = 'stalkerhek_search_hide_disabled';
 
 function loadExpandedSet() {
@@ -100,7 +118,7 @@ function loadExpandedSet() {
 function saveExpandedSet(set) {
     try { localStorage.setItem(LS_EXPAND_KEY, JSON.stringify(Array.from(set))); } catch(e) {}
 }
-function loadQuery() {
+function loadQuery()  {
     try { return localStorage.getItem(LS_QUERY_KEY) || ''; } catch(e) { return ''; }
 }
 function saveQuery(q) {
@@ -124,25 +142,121 @@ let hideDisabled = loadHideDisabled();
 // ─── Escape helpers ───────────────────────────────────────────────────────
 
 function escHtml(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function escAttr(s) {
-    return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+
+// ─── M3U8 title sanitization (mirrors stalker/normalize.go) ──────────────
+//
+// StripSuperscripts: removes the same Unicode ranges as the Go implementation.
+//   U+00B2–U+00B3, U+00B9            legacy superscript digits ²³¹
+//   U+02B0–U+02FF                    Spacing Modifier Letters
+//   U+1D00–U+1DBF                    Phonetic Extensions + Supplement
+//   U+2069                           Pop Directional Isolate
+//   U+2070–U+209F                    Superscripts and Subscripts block
+//   U+2600–U+26FF                    Miscellaneous Symbols
+//   U+2C60–U+2C7F                    Latin Extended-C modifiers
+//
+// CleanTitleForM3U8: strips superscripts, collapses orphaned mid-string
+// punctuation (e.g. " / " left when both sides were decorators), trims.
+
+function stripSuperscripts(s) {
+    // Replace each character in the stripped ranges with empty string,
+    // then collapse runs of whitespace.
+    return s.replace(
+        /[\u00B2\u00B3\u00B9\u02B0-\u02FF\u1D00-\u1DBF\u2069\u2070-\u209F\u2600-\u26FF\u2C60-\u2C7F]/g,
+        ''
+    ).replace(/\s+/g, ' ').trim();
+}
+
+function cleanTitleForM3U8(s) {
+    s = stripSuperscripts(s);
+    if (!s) return '';
+    // Collapse punctuation-only runs surrounded by whitespace
+    // mirrors: orphanMidPunctRE = \s[/\-_,;:.]+\s  => single space
+    s = s.replace(/\s[\/\-_,;:.]+\s/g, ' ');
+    return s.trim();
+}
+
+// ─── Export enabled channel names ─────────────────────────────────────────
+
+function exportEnabled() {
+    const btn  = document.getElementById('exportBtn');
+    const seen = new Set();
+    const names = [];
+
+    // Walk ALL .channel rows across all groups, regardless of expand state.
+    // A group being collapsed only hides the .channels div; the rows are
+    // still in the DOM with their toggle buttons intact.
+    document.querySelectorAll('.channel').forEach(function(row) {
+        const toggle = row.querySelector('.ch-toggle');
+        if (!toggle || !toggle.classList.contains('enabled')) return;
+
+        // Raw title is in the first cell's <strong>
+        const strong = row.querySelector('strong');
+        if (!strong) return;
+        const raw       = strong.textContent || '';
+        const sanitized = cleanTitleForM3U8(raw);
+        if (!sanitized || seen.has(sanitized)) return;
+        seen.add(sanitized);
+        names.push(sanitized);
+    });
+
+    if (names.length === 0) {
+        btn.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Nothing to copy';
+        btn.classList.add('active');
+        setTimeout(function() {
+            btn.innerHTML = '<i class="fa-solid fa-clipboard"></i> Copy Enabled Names';
+            btn.classList.remove('active');
+        }, 2000);
+        return;
+    }
+
+    const text = names.join('\n');
+
+    navigator.clipboard.writeText(text).then(function() {
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied ' + names.length + ' names!';
+        btn.classList.add('flash');
+        setTimeout(function() {
+            btn.innerHTML = '<i class="fa-solid fa-clipboard"></i> Copy Enabled Names';
+            btn.classList.remove('flash');
+        }, 2200);
+    }).catch(function() {
+        // Fallback for browsers that block clipboard in non-secure contexts
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied ' + names.length + ' names!';
+            btn.classList.add('flash');
+            setTimeout(function() {
+                btn.innerHTML = '<i class="fa-solid fa-clipboard"></i> Copy Enabled Names';
+                btn.classList.remove('flash');
+            }, 2200);
+        } catch(e) {
+            alert('Clipboard unavailable. Here are the names:\n\n' + text);
+        }
+    });
 }
 
 // ─── Hide-Disabled filter ─────────────────────────────────────────────────
 
-/** Apply or remove the hide-disabled filter across all rendered channel rows. */
 function applyHideDisabled() {
     const btn = document.getElementById('hideDisabledBtn');
     if (btn) btn.classList.toggle('active', hideDisabled);
 
     document.querySelectorAll('.result-group').forEach(function(group) {
-        const rows   = group.querySelectorAll('.channel');
-        let visible  = 0;
+        const rows  = group.querySelectorAll('.channel');
+        let visible = 0;
 
         rows.forEach(function(row) {
-            const toggle = row.querySelector('.ch-toggle');
+            const toggle     = row.querySelector('.ch-toggle');
             const isDisabled = toggle && toggle.classList.contains('disabled');
             if (hideDisabled && isDisabled) {
                 row.style.display = 'none';
@@ -152,7 +266,6 @@ function applyHideDisabled() {
             }
         });
 
-        // Show a notice inside the group when all rows are hidden
         let notice = group.querySelector('.all-hidden-notice');
         if (!notice) {
             notice = document.createElement('div');
@@ -210,18 +323,20 @@ async function performSearch() {
                 '</div>' +
                 '<div class="channels" style="display:' + display + '">' +
                     group.channels.map(function(ch) {
-                        const enabledCls   = ch.enabled ? 'enabled'        : 'disabled';
-                        const toggleLabel  = ch.enabled ? 'Enabled'         : 'Disabled';
+                        const enabledCls   = ch.enabled ? 'enabled'       : 'disabled';
+                        const toggleLabel  = ch.enabled ? 'Enabled'        : 'Disabled';
                         const willDisable  = ch.enabled;
-                        const genreBtnCls  = willDisable ? 'will-disable'   : 'will-enable';
-                        const genreBtnLbl  = willDisable ? 'Disable Genre'  : 'Enable Genre';
-                        const disabledFlag = willDisable ? '1'              : '0';
+                        const genreBtnCls  = willDisable ? 'will-disable'  : 'will-enable';
+                        const genreBtnLbl  = willDisable ? 'Disable Genre' : 'Enable Genre';
+                        const disabledFlag = willDisable ? '1'             : '0';
 
                         return '<div class="channel">' +
-                            '<div><strong>' + escHtml(ch.title) + '</strong><br><small>' + escHtml(ch.genre) + '</small></div>' +
+                            '<div><strong>' + escHtml(ch.title) + '</strong>' +
+                                '<br><small>' + escHtml(ch.genre) + '</small></div>' +
                             '<div>' +
                                 '<button class="ch-toggle ' + enabledCls + '" ' +
-                                    'onclick="toggleChannel(event,' + pid + ',\'' + escAttr(ch.cmd) + '\',' + ch.enabled + ',this)">' +
+                                    'onclick="toggleChannel(event,' + pid + ',\'' +
+                                    escAttr(ch.cmd) + '\',' + ch.enabled + ',this)">' +
                                     toggleLabel +
                                 '</button>' +
                             '</div>' +
@@ -229,7 +344,9 @@ async function performSearch() {
                                 '<button class="genre-btn ' + genreBtnCls + '" ' +
                                     'data-genre-id="'   + escHtml(ch.genre_id) + '" ' +
                                     'data-genre-name="' + escHtml(ch.genre)    + '" ' +
-                                    'onclick="toggleGenre(event,' + pid + ',\'' + escAttr(ch.genre_id) + '\',\'' + escAttr(ch.genre) + '\',' + disabledFlag + ')">' +
+                                    'onclick="toggleGenre(event,' + pid + ',\'' +
+                                    escAttr(ch.genre_id) + '\',\'' +
+                                    escAttr(ch.genre)    + '\',' + disabledFlag + ')">' +
                                     genreBtnLbl +
                                 '</button>' +
                             '</div>' +
@@ -240,8 +357,6 @@ async function performSearch() {
         });
 
         resultsDiv.innerHTML = html;
-
-        // Re-apply hide-disabled filter over the freshly rendered rows
         applyHideDisabled();
 
     } catch(e) {
@@ -264,35 +379,30 @@ async function toggleChannel(e, profileId, cmd, currentlyEnabled, btn) {
         fd.append('disabled', nowDisabled);
 
         const res = await fetch('/api/filters/toggle_channel', {
-            method: 'POST',
+            method:  'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: fd.toString()
+            body:    fd.toString()
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
 
-        const nowEnabled    = !currentlyEnabled;
-        btn.className       = 'ch-toggle ' + (nowEnabled ? 'enabled' : 'disabled');
-        btn.textContent     = nowEnabled ? 'Enabled' : 'Disabled';
+        const nowEnabled = !currentlyEnabled;
+        btn.className    = 'ch-toggle ' + (nowEnabled ? 'enabled' : 'disabled');
+        btn.textContent  = nowEnabled ? 'Enabled' : 'Disabled';
 
-        // Update adjacent genre button
         const row      = btn.closest('.channel');
         const genreBtn = row ? row.querySelector('.genre-btn') : null;
         if (genreBtn) {
             const willDisable    = nowEnabled;
             genreBtn.className   = 'genre-btn ' + (willDisable ? 'will-disable' : 'will-enable');
             genreBtn.textContent = willDisable ? 'Disable Genre' : 'Enable Genre';
-            const gid   = genreBtn.getAttribute('data-genre-id')  || '';
+            const gid   = genreBtn.getAttribute('data-genre-id')   || '';
             const gname = genreBtn.getAttribute('data-genre-name') || '';
             genreBtn.onclick = function(ev) {
                 toggleGenre(ev, profileId, gid, gname, willDisable ? '1' : '0');
             };
         }
 
-        // Patch button's own onclick with new state
         btn.onclick = function(ev) { toggleChannel(ev, profileId, cmd, nowEnabled, btn); };
-
-        // Re-apply hide filter: enabling a channel should make it visible;
-        // disabling it should hide it if the filter is active.
         applyHideDisabled();
 
     } catch(err) {
@@ -308,11 +418,10 @@ async function toggleGenre(e, profileId, genreId, genreName, disabledFlag) {
     e.stopPropagation();
 
     const willDisable = disabledFlag === '1' || disabledFlag === 1;
-    const action      = willDisable ? 'disable' : 'enable';
-
-    const confirmed = confirm(
+    const confirmed   = confirm(
         (willDisable ? 'Disable' : 'Enable') + ' entire genre "' + genreName + '"?\n\n' +
-        'This will ' + action + ' ALL channels in that genre for this profile.'
+        'This will ' + (willDisable ? 'disable' : 'enable') +
+        ' ALL channels in that genre for this profile.'
     );
     if (!confirmed) return;
 
@@ -323,14 +432,12 @@ async function toggleGenre(e, profileId, genreId, genreName, disabledFlag) {
         fd.append('disabled', willDisable ? '1' : '0');
 
         const res = await fetch('/api/filters/toggle_genre', {
-            method: 'POST',
+            method:  'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: fd.toString()
+            body:    fd.toString()
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
 
-        // Full re-search so all rows in this genre reflect their new state,
-        // and hide-disabled is reapplied by performSearch() automatically.
         performSearch();
 
     } catch(err) {
@@ -382,14 +489,13 @@ function collapseAll() {
 // ─── Boot ─────────────────────────────────────────────────────────────────
 
 (function init() {
-    // Restore button appearance before any search fires
     const btn = document.getElementById('hideDisabledBtn');
     if (btn) btn.classList.toggle('active', hideDisabled);
 
     const saved = loadQuery();
     if (saved) {
         qInput.value = saved;
-        performSearch(); // applyHideDisabled() is called inside performSearch()
+        performSearch();
     }
 })();
 
